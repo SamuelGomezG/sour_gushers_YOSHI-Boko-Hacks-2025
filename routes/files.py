@@ -197,6 +197,7 @@ def download_file(file_id):
             return send_from_directory(
                 directory,
                 filename,
+                download_name=file.filename,
                 as_attachment=True
             )
         else:
