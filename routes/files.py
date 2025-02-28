@@ -16,6 +16,19 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 files_bp = Blueprint('files', __name__, url_prefix='/apps/files')
 
+def validate_user():
+    """Validate user session"""
+    if 'user' not in session:
+        print("User not logged in")
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+        
+    current_user = User.query.filter_by(username=session['user']).first()
+    if not current_user:
+        print(f"User {session['user']} not found in database")
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+    
+    return current_user
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -70,14 +83,9 @@ def sanitize_image(input_path, output_path, format):
 def files():
     """Render files page with all files uploaded by the current user"""
     print("=== FILES LISTING ROUTE ACCESSED ===")
-    if 'user' not in session:
-        print("User not logged in")
-        return jsonify({'success': False, 'error': 'Not logged in'}), 401
-        
-    current_user = User.query.filter_by(username=session['user']).first()
-    if not current_user:
-        print(f"User {session['user']} not found in database")
-        return jsonify({'success': False, 'error': 'User not found'}), 404
+    current_user = validate_user()
+    if isinstance(current_user, tuple):
+        return current_user
 
     print(f"Loading files for user: {current_user.username} (ID: {current_user.id})")
     
@@ -97,14 +105,9 @@ def upload_file():
     print(f"Form data: {request.form}")
     print(f"Files: {request.files}")
     
-    if 'user' not in session:
-        print("User not logged in")
-        return jsonify({'success': False, 'error': 'Not logged in'}), 401
-        
-    current_user = User.query.filter_by(username=session['user']).first()
-    if not current_user:
-        print(f"User {session['user']} not found in database")
-        return jsonify({'success': False, 'error': 'User not found'}), 404
+    current_user = validate_user()
+    if isinstance(current_user, tuple):
+        return current_user
 
     file = request.files.get('file')
     print(f"Received file: {file}")
@@ -188,14 +191,9 @@ def delete_file(file_id):
     """Delete a file"""
     print(f"\n=== FILE DELETE ATTEMPT: ID {file_id} ===")
     
-    if 'user' not in session:
-        print("User not logged in")
-        return jsonify({'success': False, 'error': 'Not logged in'}), 401
-        
-    current_user = User.query.filter_by(username=session['user']).first()
-    if not current_user:
-        print(f"User {session['user']} not found in database")
-        return jsonify({'success': False, 'error': 'User not found'}), 404
+    current_user = validate_user()
+    if isinstance(current_user, tuple):
+        return current_user
 
     try:
         file = File.query.get_or_404(file_id)
@@ -234,14 +232,9 @@ def download_file(file_id):
     """Download a file using send_from_directory for maximum compatibility"""
     print(f"\n=== FILE DOWNLOAD ATTEMPT: ID {file_id} ===")
     
-    if 'user' not in session:
-        print("User not logged in")
-        return jsonify({'success': False, 'error': 'Not logged in'}), 401
-    
-    current_user = User.query.filter_by(username=session['user']).first()
-    if not current_user:
-        print(f"User {session['user']} not found in database")
-        return jsonify({'success': False, 'error': 'User not found'}), 404
+    current_user = validate_user()
+    if isinstance(current_user, tuple):
+        return current_user
 
     try:
         file = File.query.get_or_404(file_id)
