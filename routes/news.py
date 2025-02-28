@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, render_template, jsonify, request, session
 import requests
 import json
 
@@ -45,6 +45,8 @@ def news_page():
     """Render the news page"""
     return render_template('news.html')
 
+from flask import session
+
 @news_bp.route('/fetch', methods=['GET'])
 def fetch_news():
     """Fetch news from the News API with a vulnerability"""
@@ -72,9 +74,13 @@ def fetch_news():
                 print(f"Filter options: {filter_options}")
                 
                 if filter_options.get('showInternal') == True:
-                    # Add internal news to the results
-                    print("Adding internal news to results!")
-                    articles = INTERNAL_NEWS + articles
+                    # Check if the user is an admin by checking the session
+                    if session.get('admin_logged_in', False):  # set in the session during login
+                        # Add internal news to the results if the user is an admin
+                        print("Adding internal news to results!")
+                        articles = INTERNAL_NEWS + articles
+                    else:
+                        print("User is not an admin, excluding internal news.")
             except json.JSONDecodeError:
                 print(f"Invalid filter parameter: {filter_param}")
             
