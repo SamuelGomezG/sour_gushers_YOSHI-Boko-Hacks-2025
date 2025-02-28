@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, session, send_file
+from flask import Blueprint, render_template, request, jsonify, session, send_from_directory
 from extensions import db
 from models.user import User
 from models.file import File
@@ -124,7 +124,8 @@ def use_image_sanitization(extension, filename, file_path):
     print(f"Sanitizing image file: {filename}")
     
     # Temporary sanitized file path
-    sanitized_path = file_path.replace(f".{extension}", f"_sanitized.{extension}")
+    base_path = os.path.splitext(file_path)[0]
+    sanitized_path = f"{base_path}_sanitized.{extension}"
     # Determine image format
     image_format = 'JPEG' if extension.lower() in {'jpg', 'jpeg'} else extension.upper()
     
@@ -247,8 +248,6 @@ def delete_file(file_id):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
-from flask import send_from_directory
 
 @files_bp.route('/download/<int:file_id>')
 def download_file(file_id):
