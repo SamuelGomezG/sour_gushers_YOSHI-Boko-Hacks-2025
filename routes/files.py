@@ -10,6 +10,7 @@ import magic
 
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif'} 
 UPLOAD_FOLDER = 'uploads'
+MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 files_bp = Blueprint('files', __name__, url_prefix='/apps/files')
@@ -97,6 +98,10 @@ def upload_file():
     if not file:
         print("No file part in request")
         return jsonify({'success': False, 'error': 'No file part'}), 400
+    
+    if file.content_length > MAX_CONTENT_LENGTH:
+        print("File too large")
+        return jsonify({'success': False, 'error': 'File too large'}), 413
     
     if file and allowed_file(file.filename):  
         filename = secure_filename(file.filename)
