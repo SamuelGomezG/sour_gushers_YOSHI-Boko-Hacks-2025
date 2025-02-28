@@ -234,7 +234,7 @@ def delete_file(file_id):
         
         db.session.delete(file)
         db.session.commit()
-        print(f"File record deleted from database")
+        print("File record deleted from database")
         
         if os.path.exists(file_path):
             os.remove(file_path)
