@@ -152,6 +152,10 @@ def download_file(file_id):
 
     try:
         file = File.query.get_or_404(file_id)
+        
+        if file.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+        
         print(f"Found file {file_id}: {file.filename}")
         
         
