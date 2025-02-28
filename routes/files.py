@@ -14,6 +14,12 @@ files_bp = Blueprint('files', __name__, url_prefix='/apps/files')
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def get_secure_filepath(filename):
+    safe_path = os.path.abspath(os.path.join(UPLOAD_FOLDER, filename))
+    if not safe_path.startswith(os.path.abspath(UPLOAD_FOLDER)):
+        return None
+    return safe_path
+
 @files_bp.route('/')
 def files():
     """Render files page with all files uploaded by the current user"""
@@ -63,7 +69,12 @@ def upload_file():
     
     if file and allowed_file(file.filename):  
         filename = secure_filename(file.filename)
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        
+        file_path = get_secure_filepath(filename)
+        if not file_path:
+            print(f"Error: Unsafe file path: {filename}")
+            return jsonify({'success': False, 'error': 'Unsafe file path'}), 403
+        
         print(f"File path: {file_path}")
         
         try:
@@ -115,7 +126,10 @@ def delete_file(file_id):
             print(f"Access denied: File {file_id} belongs to user {file.user_id}, not {current_user.id}")
             return jsonify({'success': False, 'error': 'Access denied'}), 403
 
-        file_path = file.file_path
+        file_path = get_secure_filepath(file.filename)
+        if not file_path:
+            print(f"Error: Unsafe file path: {file.filename}")
+            return jsonify({'success': False, 'error': 'Unsafe file path'}), 403
         
         db.session.delete(file)
         db.session.commit()
@@ -160,11 +174,16 @@ def download_file(file_id):
         
         
         # Get the directory and filename
-        directory = os.path.dirname(file.file_path)
-        filename = os.path.basename(file.file_path)
+        file_path = get_secure_filepath(file.filename)
+        if not file_path:
+            print(f"Error: Unsafe file path: {file.filename}")
+            return jsonify({'success': False, 'error': 'Unsafe file path'}), 403
         
-        if os.path.exists(file.file_path):
-            print(f"Sending file: {file.file_path}")
+        directory = os.path.dirname(file_path)
+        filename = os.path.basename(file_path)
+        
+        if os.path.exists(file_path):
+            print(f"Sending file: {file_path}")
             
             return send_from_directory(
                 directory,
@@ -172,7 +191,7 @@ def download_file(file_id):
                 as_attachment=True
             )
         else:
-            print(f"Error: File not found on filesystem: {file.file_path}")
+            print(f"Error: File not found on filesystem: {file_path}")
             return jsonify({'success': False, 'error': 'File not found on server'}), 404
     except Exception as e:
         print(f"Error sending file: {str(e)}")
