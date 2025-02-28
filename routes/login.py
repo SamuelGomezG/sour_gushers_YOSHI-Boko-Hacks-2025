@@ -13,6 +13,7 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
             session["user"] = user.username
+            session["admin_logged_in"] = user.is_admin
             flash("Login successful!", "success")
             return redirect(url_for("hub.hub"))
         else:
