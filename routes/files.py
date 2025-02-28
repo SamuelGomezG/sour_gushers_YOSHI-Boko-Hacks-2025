@@ -6,7 +6,6 @@ import os
 from werkzeug.utils import secure_filename
 import datetime
 import uuid
-import magic
 from PIL import Image
 
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif'} 
@@ -45,23 +44,25 @@ def get_unique_filename(original_filename, user_id):
     return unique_filename
 
 def validate_file_content(file_path, claimed_extension):
-    """Verify file content matches its extension"""
-    try:
-        mime_type = magic.from_file(file_path, mime=True)
+    """Verify file content matches its extension using file signatures"""
+    signatures = {
+        'pdf': b'%PDF',
+        'png': b'\x89PNG\r\n\x1a\n',
+        'jpg': b'\xff\xd8\xff',
+        'jpeg': b'\xff\xd8\xff',
+        'gif': b'GIF8',
+    }
     
-        mime_map = {
-            'pdf': 'application/pdf',
-            'png': 'image/png',
-            'jpg': 'image/jpeg',
-            'jpeg': 'image/jpeg',
-            'gif': 'image/gif'
-        }
+    expected_signature = signatures.get(claimed_extension.lower())
+    if not expected_signature:
+        return False
+    
+    try:
+        with open(file_path, 'rb') as file:
+            # Read enough bytes to check the longest signature
+            file_signature = file.read(max(len(sig) for sig in signatures.values()))
         
-        expected_mime = mime_map.get(claimed_extension.lower())
-        if not expected_mime:
-            return False
-        
-        return mime_type == expected_mime
+        return file_signature.startswith(expected_signature)
     except Exception as e:
         print(f"Error validating file content: {str(e)}")
         return False
