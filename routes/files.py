@@ -4,6 +4,8 @@ from models.user import User
 from models.file import File
 import os
 from werkzeug.utils import secure_filename
+import datetime
+import uuid
 
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif'} 
 UPLOAD_FOLDER = 'uploads'
@@ -19,6 +21,12 @@ def get_secure_filepath(filename):
     if not safe_path.startswith(os.path.abspath(UPLOAD_FOLDER)):
         return None
     return safe_path
+
+def get_unique_filename(original_filename, user_id):
+    """Generate a unique filename using a UUID to prevent overwriting"""
+    extension = os.path.splitext(original_filename)[1] if '.' in original_filename else ''
+    unique_filename = f"{datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%S')}_{user_id}_{uuid.uuid4().hex[:8]}{extension}"
+    return unique_filename
 
 @files_bp.route('/')
 def files():
@@ -69,10 +77,11 @@ def upload_file():
     
     if file and allowed_file(file.filename):  
         filename = secure_filename(file.filename)
+        unique_filename = get_unique_filename(filename, current_user.id)
         
-        file_path = get_secure_filepath(filename)
+        file_path = get_secure_filepath(unique_filename)
         if not file_path:
-            print(f"Error: Unsafe file path: {filename}")
+            print(f"Error: Unsafe file path: {unique_filename}")
             return jsonify({'success': False, 'error': 'Unsafe file path'}), 403
         
         print(f"File path: {file_path}")
@@ -126,8 +135,8 @@ def delete_file(file_id):
             print(f"Access denied: File {file_id} belongs to user {file.user_id}, not {current_user.id}")
             return jsonify({'success': False, 'error': 'Access denied'}), 403
 
-        file_path = get_secure_filepath(file.filename)
-        if not file_path:
+        file_path = file.file_path
+        if not os.path.abspath(file_path).startswith(os.path.abspath(UPLOAD_FOLDER)):
             print(f"Error: Unsafe file path: {file.filename}")
             return jsonify({'success': False, 'error': 'Unsafe file path'}), 403
         
@@ -174,8 +183,8 @@ def download_file(file_id):
         
         
         # Get the directory and filename
-        file_path = get_secure_filepath(file.filename)
-        if not file_path:
+        file_path = file.file_path
+        if not os.path.abspath(file_path).startswith(os.path.abspath(UPLOAD_FOLDER)):
             print(f"Error: Unsafe file path: {file.filename}")
             return jsonify({'success': False, 'error': 'Unsafe file path'}), 403
         
