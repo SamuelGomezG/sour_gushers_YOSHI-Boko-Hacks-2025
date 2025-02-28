@@ -97,6 +97,21 @@ def files():
     
     return render_template('files.html', files=all_files, current_user_id=current_user.id)
 
+def validate_file(file):
+    if not file:
+        print("No file part in request")
+        return jsonify({'success': False, 'error': 'No file part'}), 400
+    
+    if file.content_length > MAX_CONTENT_LENGTH:
+        print("File too large")
+        return jsonify({'success': False, 'error': 'File too large'}), 413
+    
+    if not allowed_file(file.filename):
+        print("File type not allowed")
+        return jsonify({'success': False, 'error': 'File type not allowed'}), 400
+    
+    return None
+
 @files_bp.route('/upload', methods=['POST'])
 def upload_file():
     """Handle file upload with intentional vulnerability"""
@@ -112,79 +127,71 @@ def upload_file():
     file = request.files.get('file')
     print(f"Received file: {file}")
     
-    if not file:
-        print("No file part in request")
-        return jsonify({'success': False, 'error': 'No file part'}), 400
+    file_validation = validate_file(file)
+    if file_validation is not None:
+        return file_validation
     
-    if file.content_length > MAX_CONTENT_LENGTH:
-        print("File too large")
-        return jsonify({'success': False, 'error': 'File too large'}), 413
+    filename = secure_filename(file.filename)
+    unique_filename = get_unique_filename(filename, current_user.id)
     
-    if file and allowed_file(file.filename):  
-        filename = secure_filename(file.filename)
-        unique_filename = get_unique_filename(filename, current_user.id)
+    file_path = get_secure_filepath(unique_filename)
+    if not file_path:
+        print(f"Error: Unsafe file path: {unique_filename}")
+        return jsonify({'success': False, 'error': 'Unsafe file path'}), 403
+    
+    print(f"File path: {file_path}")
+    
+    try:
+        file.save(file_path)
+        print(f"File saved successfully at {file_path}")
         
-        file_path = get_secure_filepath(unique_filename)
-        if not file_path:
-            print(f"Error: Unsafe file path: {unique_filename}")
-            return jsonify({'success': False, 'error': 'Unsafe file path'}), 403
+        extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+        if not validate_file_content(file_path, extension):
+            print(f"Error: File content does not match extension: {filename}")
+            os.remove(file_path)
+            return jsonify({'success': False, 'error': 'File content validation failed'}), 403
         
-        print(f"File path: {file_path}")
-        
-        try:
-            file.save(file_path)
-            print(f"File saved successfully at {file_path}")
+        image_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+        if extension in image_extensions:
+            print(f"Sanitizing image file: {filename}")
             
-            extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-            if not validate_file_content(file_path, extension):
-                print(f"Error: File content does not match extension: {filename}")
-                os.remove(file_path)
-                return jsonify({'success': False, 'error': 'File content validation failed'}), 403
+            # Temporary sanitized file path
+            sanitized_path = file_path.replace(f".{extension}", f"_sanitized.{extension}")
+            # Determine image format
+            image_format = 'JPEG' if extension.lower() in {'jpg', 'jpeg'} else extension.upper()
             
-            image_extensions = {'png', 'jpg', 'jpeg', 'gif'}
-            if extension in image_extensions:
-                print(f"Sanitizing image file: {filename}")
-                
-                # Temporary sanitized file path
-                sanitized_path = file_path.replace(f".{extension}", f"_sanitized.{extension}")
-                # Determine image format
-                image_format = 'JPEG' if extension.lower() in {'jpg', 'jpeg'} else extension.upper()
-                
-                # Sanitize the image
-                if not sanitize_image(file_path, sanitized_path, image_format):
-                    print(f"Error sanitizing image: {filename}")
-                    os.remove(file_path)
-                    if os.path.exists(sanitized_path):
-                        os.remove(sanitized_path)
-                    return jsonify({'success': False, 'error': 'Image sanitization failed'}), 500
-                
-                # Replace the original file with the sanitized version
+            # Sanitize the image
+            if not sanitize_image(file_path, sanitized_path, image_format):
+                print(f"Error sanitizing image: {filename}")
                 os.remove(file_path)
-                os.rename(sanitized_path, file_path)
-                print(f"Image sanitized successfully: {filename}")
+                if os.path.exists(sanitized_path):
+                    os.remove(sanitized_path)
+                return jsonify({'success': False, 'error': 'Image sanitization failed'}), 500
+            
+            # Replace the original file with the sanitized version
+            os.remove(file_path)
+            os.rename(sanitized_path, file_path)
+            print(f"Image sanitized successfully: {filename}")
 
-            new_file = File(
-                filename=filename,
-                file_path=file_path,
-                user_id=current_user.id
-            )
-            db.session.add(new_file)
-            db.session.commit()
-            print(f"File record saved to database with ID: {new_file.id}")
+        new_file = File(
+            filename=filename,
+            file_path=file_path,
+            user_id=current_user.id
+        )
+        db.session.add(new_file)
+        db.session.commit()
+        print(f"File record saved to database with ID: {new_file.id}")
 
-            return jsonify({
-                'success': True,
-                'message': 'File uploaded successfully!',
-                'file': new_file.to_dict()
-            })
-        except Exception as e:
-            print(f"Error saving file: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({'success': False, 'error': str(e)}), 500
-    else:
-        print("File type not allowed or no file uploaded")
-        return jsonify({'success': False, 'error': 'File type not allowed'}), 400
+        return jsonify({
+            'success': True,
+            'message': 'File uploaded successfully!',
+            'file': new_file.to_dict()
+        })
+    except Exception as e:
+        print(f"Error saving file: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @files_bp.route('/delete/<int:file_id>', methods=['DELETE'])
 def delete_file(file_id):
