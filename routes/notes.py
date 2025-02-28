@@ -4,6 +4,7 @@ from models.user import User
 from models.note import Note
 from datetime import datetime
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 notes_bp = Blueprint('notes', __name__, url_prefix='/apps/notes')
 
@@ -89,45 +90,39 @@ def search_notes():
     query = request.args.get('q', '')
     print(f"Search query: {query}")
     
-    try:
-        sql = f"SELECT * FROM notes WHERE title LIKE '%{query}%' OR content LIKE '%{query}%'"
-        
-        # Log the raw SQL for debugging
-        print(f"Executing SQL: {sql}")
-        
-        # Execute the raw SQL
-        result = db.session.execute(text(sql))
-        
-        notes = []
-        for row in result:
-            # Handle created_at formatting properly - could be a string or datetime
-            created_at = row[3]
-            if isinstance(created_at, str):
-                created_at_str = created_at
-            else:
-                try:
-                    created_at_str = created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else None
-                except AttributeError:
-                    created_at_str = str(created_at) if created_at else None
-            
-            note = {
-                'id': row[0],
-                'title': row[1],
-                'content': row[2],
-                'created_at': created_at_str,
-                'user_id': row[4]
-            }
-            notes.append(note)
-        
-        print(f"Found {len(notes)} matching notes")
+    requested_notes = Note.query.filter_by(user_id=int(current_user.id), title=query).all()
+    
+    if requested_notes:
+        print(f"Found {len(requested_notes)} notes matching the search query")
         return jsonify({
             'success': True,
-            'notes': notes
+            'notes': [note.to_dict() for note in requested_notes]
         })
-    except Exception as e:
-        print(f"Error searching notes: {e}")
+    
+    try:
+        
+        notes = Note.query.filter(
+            Note.user_id == current_user.id,  # Ensure only their notes are queried
+            (Note.title.ilike(f"%{query}%")) | (Note.content.ilike(f"%{query}%"))
+        ).order_by(Note.created_at.desc()).all()
+
+        # Convert results to JSON format
+        notes_data = [
+            {
+                'id': note.id,
+                'title': note.title,
+                'content': note.content,
+                'created_at': note.created_at.strftime('%Y-%m-%d %H:%M:%S') if isinstance(note.created_at, datetime) else str(note.created_at),
+                'user_id': note.user_id
+            }
+            for note in notes
+        ]
+
+        return jsonify({'success': True, 'notes': notes_data})
+
+    except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Database error'}), 500
     
 
 @notes_bp.route('/delete/<int:note_id>', methods=['DELETE'])
