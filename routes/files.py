@@ -20,7 +20,7 @@ def get_secure_filepath(filename):
     safe_path = os.path.abspath(os.path.join(UPLOAD_FOLDER, filename))
     if not safe_path.startswith(os.path.abspath(UPLOAD_FOLDER)):
         return None
-    return safe_path
+    return os.path.join(UPLOAD_FOLDER, filename)
 
 def get_unique_filename(original_filename, user_id):
     """Generate a unique filename using a UUID to prevent overwriting"""
