@@ -6,6 +6,7 @@ import os
 from werkzeug.utils import secure_filename
 import datetime
 import uuid
+import magic
 
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif'} 
 UPLOAD_FOLDER = 'uploads'
@@ -27,6 +28,28 @@ def get_unique_filename(original_filename, user_id):
     extension = os.path.splitext(original_filename)[1] if '.' in original_filename else ''
     unique_filename = f"{datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%S')}_{user_id}_{uuid.uuid4().hex[:8]}{extension}"
     return unique_filename
+
+def validate_file_content(file_path, claimed_extension):
+    """Verify file content matches its extension"""
+    try:
+        mime_type = magic.from_file(file_path, mime=True)
+    
+        mime_map = {
+            'pdf': 'application/pdf',
+            'png': 'image/png',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'gif': 'image/gif'
+        }
+        
+        expected_mime = mime_map.get(claimed_extension.lower())
+        if not expected_mime:
+            return False
+        
+        return mime_type == expected_mime
+    except Exception as e:
+        print(f"Error validating file content: {str(e)}")
+        return False
 
 @files_bp.route('/')
 def files():
@@ -89,6 +112,12 @@ def upload_file():
         try:
             file.save(file_path)
             print(f"File saved successfully at {file_path}")
+            
+            extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+            if not validate_file_content(file_path, extension):
+                print(f"Error: File content does not match extension: {filename}")
+                os.remove(file_path)
+                return jsonify({'success': False, 'error': 'File content validation failed'}), 403
 
             new_file = File(
                 filename=filename,
