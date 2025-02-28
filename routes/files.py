@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 import datetime
 import uuid
 import magic
+from PIL import Image
 
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif'} 
 UPLOAD_FOLDER = 'uploads'
@@ -50,6 +51,19 @@ def validate_file_content(file_path, claimed_extension):
         return mime_type == expected_mime
     except Exception as e:
         print(f"Error validating file content: {str(e)}")
+        return False
+
+def sanitize_image(input_path, output_path, format):
+    """Process image to strip any embedded code"""
+    
+    try:
+        with Image.open(input_path) as img:
+            if img.mode != 'RGB' and format.lower() != 'gif':
+                img = img.convert('RGB')
+            img.save(output_path, format=format)
+        return True
+    except Exception as e:
+        print(f"Error sanitizing image: {str(e)}")
         return False
 
 @files_bp.route('/')
@@ -123,6 +137,28 @@ def upload_file():
                 print(f"Error: File content does not match extension: {filename}")
                 os.remove(file_path)
                 return jsonify({'success': False, 'error': 'File content validation failed'}), 403
+            
+            image_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+            if extension in image_extensions:
+                print(f"Sanitizing image file: {filename}")
+                
+                # Temporary sanitized file path
+                sanitized_path = file_path.replace(f".{extension}", f"_sanitized.{extension}")
+                # Determine image format
+                image_format = 'JPEG' if extension.lower() in {'jpg', 'jpeg'} else extension.upper()
+                
+                # Sanitize the image
+                if not sanitize_image(file_path, sanitized_path, image_format):
+                    print(f"Error sanitizing image: {filename}")
+                    os.remove(file_path)
+                    if os.path.exists(sanitized_path):
+                        os.remove(sanitized_path)
+                    return jsonify({'success': False, 'error': 'Image sanitization failed'}), 500
+                
+                # Replace the original file with the sanitized version
+                os.remove(file_path)
+                os.rename(sanitized_path, file_path)
+                print(f"Image sanitized successfully: {filename}")
 
             new_file = File(
                 filename=filename,
