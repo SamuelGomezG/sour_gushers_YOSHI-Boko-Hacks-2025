@@ -112,6 +112,37 @@ def validate_file(file):
     
     return None
 
+def use_content_validation(filename, file_path, extension):
+    if not validate_file_content(file_path, extension):
+        print(f"Error: File content does not match extension: {filename}")
+        os.remove(file_path)
+        return jsonify({'success': False, 'error': 'File content validation failed'}), 403
+    
+    return None
+
+def use_image_sanitization(extension, filename, file_path):
+    print(f"Sanitizing image file: {filename}")
+    
+    # Temporary sanitized file path
+    sanitized_path = file_path.replace(f".{extension}", f"_sanitized.{extension}")
+    # Determine image format
+    image_format = 'JPEG' if extension.lower() in {'jpg', 'jpeg'} else extension.upper()
+    
+    # Sanitize the image
+    if not sanitize_image(file_path, sanitized_path, image_format):
+        print(f"Error sanitizing image: {filename}")
+        os.remove(file_path)
+        if os.path.exists(sanitized_path):
+            os.remove(sanitized_path)
+        return jsonify({'success': False, 'error': 'Image sanitization failed'}), 500
+    
+    # Replace the original file with the sanitized version
+    os.remove(file_path)
+    os.rename(sanitized_path, file_path)
+    print(f"Image sanitized successfully: {filename}")
+    
+    return None
+
 @files_bp.route('/upload', methods=['POST'])
 def upload_file():
     """Handle file upload with intentional vulnerability"""
@@ -145,33 +176,18 @@ def upload_file():
         file.save(file_path)
         print(f"File saved successfully at {file_path}")
         
+        # Validate file content
         extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-        if not validate_file_content(file_path, extension):
-            print(f"Error: File content does not match extension: {filename}")
-            os.remove(file_path)
-            return jsonify({'success': False, 'error': 'File content validation failed'}), 403
+        content_validation = use_content_validation(filename, file_path, extension)
+        if content_validation is not None:
+            return content_validation
         
+        # Sanitize image files
         image_extensions = {'png', 'jpg', 'jpeg', 'gif'}
         if extension in image_extensions:
-            print(f"Sanitizing image file: {filename}")
-            
-            # Temporary sanitized file path
-            sanitized_path = file_path.replace(f".{extension}", f"_sanitized.{extension}")
-            # Determine image format
-            image_format = 'JPEG' if extension.lower() in {'jpg', 'jpeg'} else extension.upper()
-            
-            # Sanitize the image
-            if not sanitize_image(file_path, sanitized_path, image_format):
-                print(f"Error sanitizing image: {filename}")
-                os.remove(file_path)
-                if os.path.exists(sanitized_path):
-                    os.remove(sanitized_path)
-                return jsonify({'success': False, 'error': 'Image sanitization failed'}), 500
-            
-            # Replace the original file with the sanitized version
-            os.remove(file_path)
-            os.rename(sanitized_path, file_path)
-            print(f"Image sanitized successfully: {filename}")
+            image_sanitization = use_image_sanitization(extension, filename, file_path)
+            if image_sanitization is not None:
+                return image_sanitization
 
         new_file = File(
             filename=filename,
