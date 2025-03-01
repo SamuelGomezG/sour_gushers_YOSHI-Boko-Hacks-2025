@@ -1,6 +1,23 @@
 # BokoHacks 2025
 An Application Security Challenge Platform for Texas State University's 2025 BokoHacks
 
+## Team Members
+- Samuel Gomez Guio
+- Gabriele Saldana
+- Samantha Hanna
+
+## Tools and Resources Used
+- Flask
+- SQLite
+- Python
+- HTML
+- CSS
+- JavaScript
+- GitHub Copilot
+- VS Code
+- Git
+- GitHub
+
 ## Overview
 This project is a deliberately vulnerable web application designed to help students learn about common web security vulnerabilities through hands-on practice. It includes various challenges focusing on SQL injection, XSS (Cross-Site Scripting), access control vulnerabilities, and authentication bypass techniques.
 
